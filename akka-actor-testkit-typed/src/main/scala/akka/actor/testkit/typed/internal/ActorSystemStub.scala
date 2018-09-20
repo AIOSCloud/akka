@@ -17,18 +17,19 @@ import akka.actor.typed.{
   ExtensionId,
   Logger,
   Props,
-  Settings,
-  Terminated
+  Settings
 }
 import akka.annotation.InternalApi
 import akka.util.Timeout
 import akka.{ actor => untyped }
+import akka.Done
 import com.typesafe.config.ConfigFactory
 import scala.compat.java8.FutureConverters
 import scala.concurrent._
 
 import akka.actor.ActorRefProvider
 import akka.actor.typed.internal.InternalRecipientRef
+import akka.dispatch.ExecutionContexts.sameThreadExecutionContext
 
 /**
  * INTERNAL API
@@ -73,13 +74,10 @@ import akka.actor.typed.internal.InternalRecipientRef
 
   override def scheduler: untyped.Scheduler = throw new UnsupportedOperationException("no scheduler")
 
-  private val terminationPromise = Promise[Terminated]
-  override def terminate(): Future[akka.actor.typed.Terminated] = {
-    terminationPromise.trySuccess(Terminated(this))
-    terminationPromise.future
-  }
-  override def whenTerminated: Future[akka.actor.typed.Terminated] = terminationPromise.future
-  override def getWhenTerminated: CompletionStage[Terminated] = FutureConverters.toJava(whenTerminated)
+  private val terminationPromise = Promise[Done]
+  override def terminate(): Unit = terminationPromise.trySuccess(Done)
+  override def whenTerminated: Future[Done] = terminationPromise.future.map(_ => Done)(sameThreadExecutionContext)
+  override def getWhenTerminated: CompletionStage[Done] = FutureConverters.toJava(whenTerminated)
   override val startTime: Long = System.currentTimeMillis()
   override def uptime: Long = System.currentTimeMillis() - startTime
   override def threadFactory: java.util.concurrent.ThreadFactory = new ThreadFactory {
