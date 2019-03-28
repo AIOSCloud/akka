@@ -324,12 +324,19 @@ private[akka] object Running {
     def onSaveSnapshotResponse(response: SnapshotProtocol.Response): Unit = {
       val signal = response match {
         case e @ SaveSnapshotSuccess(meta) =>
-          // # 24698 The deletion of old events are automatic, snapshots are triggered by the SaveSnapshotSuccess.
           setup.log.debug(s"Persistent snapshot [{}] saved successfully", meta)
-          if (setup.retention.deleteEventsOnSnapshot)
-            internalDeleteEvents(e, state)
-          else
-            internalDeleteSnapshots(setup.retention.toSequenceNumber(meta.sequenceNr))
+          // deletion of old events and snspahots are triggered by the SaveSnapshotSuccess
+          setup.retention match {
+            case DisabledRetentionCriteria                     => // no further actions
+            case s @ SnapshotRetentionCriteriaImpl(_, _, true) =>
+              // deleteEventsOnSnapshot == true, deletion of old events
+              val deleteEventsToSeqNr = s.toSequenceNumber(meta.sequenceNr)
+              internalDeleteEvents(deleteEventsToSeqNr, meta.sequenceNr)
+            case s @ SnapshotRetentionCriteriaImpl(_, _, false) =>
+              // deleteEventsOnSnapshot == false, deletion of old snapshots
+              val deleteSnapshotsToSeqNr = s.toSequenceNumber(meta.sequenceNr)
+              internalDeleteSnapshots(s.deleteSnapshotsFromSequenceNr(deleteSnapshotsToSeqNr), deleteSnapshotsToSeqNr)
+          }
 
           Some(SnapshotCompleted(SnapshotMetadata.fromUntyped(meta)))
 
@@ -418,10 +425,15 @@ private[akka] object Running {
     val signal = response match {
       case DeleteMessagesSuccess(toSequenceNr) =>
         setup.log.debug("Persistent events to sequenceNr [{}] deleted successfully.", toSequenceNr)
-        // The reason for -1 is that a snapshot at the exact toSequenceNr is still useful and the events
-        // after that can be replayed after that snapshot, but replaying the events after toSequenceNr without
-        // starting at the snapshot at toSequenceNr would be invalid.
-        internalDeleteSnapshots(toSequenceNr - 1)
+        setup.retention match {
+          case DisabledRetentionCriteria        => // no further actions
+          case s: SnapshotRetentionCriteriaImpl =>
+            // The reason for -1 is that a snapshot at the exact toSequenceNr is still useful and the events
+            // after that can be replayed after that snapshot, but replaying the events after toSequenceNr without
+            // starting at the snapshot at toSequenceNr would be invalid.
+            val deleteSnapshotsToSeqNr = toSequenceNr - 1
+            internalDeleteSnapshots(s.deleteSnapshotsFromSequenceNr(deleteSnapshotsToSeqNr), deleteSnapshotsToSeqNr)
+        }
         Some(DeleteEventsCompleted(toSequenceNr))
       case DeleteMessagesFailure(e, toSequenceNr) =>
         Some(DeleteEventsFailed(toSequenceNr, e))

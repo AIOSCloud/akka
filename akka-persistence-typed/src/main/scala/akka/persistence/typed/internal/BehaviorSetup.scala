@@ -15,8 +15,8 @@ import akka.annotation.InternalApi
 import akka.persistence._
 import akka.persistence.typed.EventAdapter
 import akka.persistence.typed.PersistenceId
-import akka.persistence.typed.RetentionCriteria
 import akka.persistence.typed.scaladsl.EventSourcedBehavior
+import akka.persistence.typed.scaladsl.RetentionCriteria
 import akka.util.ConstantFun
 import akka.util.OptionVal
 

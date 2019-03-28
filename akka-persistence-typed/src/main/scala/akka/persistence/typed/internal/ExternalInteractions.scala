@@ -105,26 +105,26 @@ private[akka] trait JournalInteractions[C, E, S] {
   }
 
   /**
-   * On [[akka.persistence.SaveSnapshotSuccess]], if [[akka.persistence.typed.RetentionCriteria.deleteEventsOnSnapshot]]
-   * is enabled, old messages are deleted based on [[akka.persistence.typed.RetentionCriteria.snapshotEveryNEvents]]
+   * On [[akka.persistence.SaveSnapshotSuccess]], if `SnapshotRetentionCriteria.deleteEventsOnSnapshot`
+   * is enabled, old messages are deleted based on `SnapshotRetentionCriteria.snapshotEveryNEvents`
    * before old snapshots are deleted.
    */
-  protected def internalDeleteEvents(e: SaveSnapshotSuccess, state: Running.RunningState[S]): Unit =
-    if (setup.retention.deleteEventsOnSnapshot) {
-      val toSequenceNr = setup.retention.toSequenceNumber(e.metadata.sequenceNr)
+  protected def internalDeleteEvents(toSequenceNr: Long, lastSequenceNr: Long): Unit =
+    setup.retention match {
+      case s @ SnapshotRetentionCriteriaImpl(_, _, true) =>
+        if (toSequenceNr > 0) {
+          val self = setup.selfUntyped
 
-      if (toSequenceNr > 0) {
-        val lastSequenceNr = state.seqNr
-        val self = setup.selfUntyped
-
-        if (toSequenceNr == Long.MaxValue || toSequenceNr <= lastSequenceNr)
-          setup.journal ! JournalProtocol.DeleteMessagesTo(e.metadata.persistenceId, toSequenceNr, self)
-        else
-          self ! DeleteMessagesFailure(
-            new RuntimeException(
-              s"toSequenceNr [$toSequenceNr] must be less than or equal to lastSequenceNr [$lastSequenceNr]"),
-            toSequenceNr)
-      }
+          if (toSequenceNr == Long.MaxValue || toSequenceNr <= lastSequenceNr)
+            setup.journal ! JournalProtocol.DeleteMessagesTo(setup.persistenceId.id, toSequenceNr, self)
+          else
+            self ! DeleteMessagesFailure(
+              new RuntimeException(
+                s"toSequenceNr [$toSequenceNr] must be less than or equal to lastSequenceNr [$lastSequenceNr]"),
+              toSequenceNr)
+        }
+      case SnapshotRetentionCriteriaImpl(_, _, false) => // don't delete events
+      case DisabledRetentionCriteria                  => // don't delete events
     }
 }
 
@@ -153,12 +153,8 @@ private[akka] trait SnapshotInteractions[C, E, S] {
   }
 
   /** Deletes the snapshots up to and including the `sequenceNr`. */
-  protected def internalDeleteSnapshots(toSequenceNr: Long): Unit = {
+  protected def internalDeleteSnapshots(fromSequenceNr: Long, toSequenceNr: Long): Unit = {
     if (toSequenceNr > 0) {
-      // We could use 0 as fromSequenceNr to delete all older snapshots, but that might be inefficient for
-      // large ranges depending on how it's implemented in the snapshot plugin. Therefore we use the
-      // same window as defined for how much to keep in the retention criteria
-      val fromSequenceNr = setup.retention.toSequenceNumber(toSequenceNr)
       val snapshotCriteria = SnapshotSelectionCriteria(minSequenceNr = fromSequenceNr, maxSequenceNr = toSequenceNr)
       setup.log.debug("Deleting snapshots from sequenceNr [{}] to [{}]", fromSequenceNr, toSequenceNr)
       setup.snapshotStore

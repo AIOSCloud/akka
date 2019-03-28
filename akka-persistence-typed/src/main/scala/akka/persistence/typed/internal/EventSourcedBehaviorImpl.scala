@@ -31,10 +31,10 @@ import akka.persistence.typed.DeletionTarget
 import akka.persistence.typed.EventAdapter
 import akka.persistence.typed.NoOpEventAdapter
 import akka.persistence.typed.PersistenceId
-import akka.persistence.typed.RetentionCriteria
 import akka.persistence.typed.SnapshotCompleted
 import akka.persistence.typed.SnapshotFailed
 import akka.persistence.typed.SnapshotSelectionCriteria
+import akka.persistence.typed.scaladsl.RetentionCriteria
 import akka.persistence.typed.scaladsl._
 import akka.util.ConstantFun
 
@@ -170,9 +170,6 @@ private[akka] final case class EventSourcedBehaviorImpl[Command, Event, State](
   override def receiveSignal(handler: PartialFunction[Signal, Unit]): EventSourcedBehavior[Command, Event, State] =
     copy(signalHandler = handler)
 
-  override def snapshotWhen(predicate: (State, Event, Long) => Boolean): EventSourcedBehavior[Command, Event, State] =
-    copy(snapshotWhen = predicate)
-
   override def withJournalPluginId(id: String): EventSourcedBehavior[Command, Event, State] = {
     require(id != null, "journal plugin id must not be null; use empty string for 'default' journal")
     copy(journalPluginId = if (id != "") Some(id) else None)
@@ -188,11 +185,24 @@ private[akka] final case class EventSourcedBehaviorImpl[Command, Event, State](
     copy(recovery = Recovery(selection.toUntyped))
   }
 
+  override def snapshotWhen(predicate: (State, Event, Long) => Boolean): EventSourcedBehavior[Command, Event, State] = {
+    if (retention != RetentionCriteria.disabled)
+      throw new IllegalArgumentException(s"RetentionCriteria [$retention] can't be combined with `snapshotWhen`.")
+    copy(snapshotWhen = predicate)
+  }
+
   override def withRetention(criteria: RetentionCriteria): EventSourcedBehavior[Command, Event, State] = {
-    require(
-      criteria.snapshotEveryNEvents > 0,
-      s"'snapshotEveryNEvents' must be positive but was ${criteria.snapshotEveryNEvents}")
-    copy(retention = criteria, snapshotWhen = (_, _, seqNr) => seqNr % criteria.snapshotEveryNEvents == 0)
+    criteria match {
+      case DisabledRetentionCriteria => copy(retention = criteria)
+      case s: SnapshotRetentionCriteriaImpl =>
+        if (retention != RetentionCriteria.disabled)
+          throw new IllegalArgumentException(s"RetentionCriteria [$retention] has already been defined.")
+        if (snapshotWhen ne ConstantFun.scalaAnyThreeToFalse)
+          throw new IllegalArgumentException(
+            s"`snapshotWhen` has already been defined, and can't be combined " +
+            s"with RetentionCriteria [$criteria].")
+        copy(retention = criteria, snapshotWhen = (_, _, seqNr) => s.snapshotWhen(seqNr))
+    }
   }
 
   override def withTagger(tagger: Event => Set[String]): EventSourcedBehavior[Command, Event, State] =
