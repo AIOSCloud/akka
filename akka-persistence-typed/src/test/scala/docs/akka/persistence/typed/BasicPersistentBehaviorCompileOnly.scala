@@ -6,20 +6,18 @@ package docs.akka.persistence.typed
 
 import scala.concurrent.duration._
 
-import akka.actor.typed.{ Behavior, SupervisorStrategy }
+import akka.actor.typed.Behavior
+import akka.actor.typed.SupervisorStrategy
 import akka.actor.typed.scaladsl.Behaviors
-import akka.persistence.typed.scaladsl.EventSourcedBehavior
 import akka.persistence.typed.DeleteEventsFailed
 import akka.persistence.typed.DeleteSnapshotsFailed
-import akka.persistence.typed.SnapshotFailed
 import akka.persistence.typed.PersistenceId
 import akka.persistence.typed.RecoveryCompleted
+import akka.persistence.typed.SnapshotFailed
+import akka.persistence.typed.scaladsl.EventSourcedBehavior
 
 object BasicPersistentBehaviorCompileOnly {
 
-  import akka.persistence.typed.scaladsl.RetentionCriteria
-  import akka.persistence.typed.scaladsl.RetentionCriteria
-  import akka.persistence.typed.scaladsl.RetentionCriteria
   import akka.persistence.typed.scaladsl.RetentionCriteria
 
   object FirstExample {

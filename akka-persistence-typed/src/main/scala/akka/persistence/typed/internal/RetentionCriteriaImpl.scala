@@ -4,25 +4,14 @@
 
 package akka.persistence.typed.internal
 
+import akka.annotation.InternalApi
 import akka.persistence.typed.scaladsl
 import akka.persistence.typed.javadsl
 
 /**
- * Setup snapshot and event delete/retention behavior. Retention bridges snapshot
- * and journal behavior. This defines the retention criteria.
- *
- * @param snapshotEveryNEvents Snapshots are used to reduce playback/recovery times.
- *                             This defines when a new snapshot is persisted - on every N events.
- *                            `snapshotEveryNEvents` must be greater than 0.
- * @param keepNSnapshots      After a snapshot is successfully completed,
- *                             - if 2: retain last maximum 2 *`snapshot-size` events
- *                             and 3 snapshots (2 old + latest snapshot)
- *                             - if 0: all events with equal or lower sequence number
- *                             will not be retained. FIXME this comment is strange
- * @param deleteEventsOnSnapshot Opt-in ability to delete older events on successful
- *                               save of snapshot. Defaults to disabled.
+ * INTERNAL API
  */
-final case class SnapshotRetentionCriteriaImpl(
+@InternalApi private[akka] final case class SnapshotRetentionCriteriaImpl(
     snapshotEveryNEvents: Int,
     keepNSnapshots: Int,
     deleteEventsOnSnapshot: Boolean)
@@ -30,7 +19,6 @@ final case class SnapshotRetentionCriteriaImpl(
     with scaladsl.SnapshotRetentionCriteria {
 
   require(snapshotEveryNEvents > 0, s"snapshotEveryNEvents must be greater than 0, was [$snapshotEveryNEvents]")
-  // FIXME should we support 1 as minimum?
   require(keepNSnapshots > 0, s"keepNSnapshots must be greater than 0, was [$keepNSnapshots]")
 
   def snapshotWhen(currentSequenceNr: Long): Boolean =
@@ -56,7 +44,12 @@ final case class SnapshotRetentionCriteriaImpl(
   override def asJava: javadsl.RetentionCriteria = this
 }
 
-case object DisabledRetentionCriteria extends javadsl.RetentionCriteria with scaladsl.RetentionCriteria {
+/**
+ * INTERNAL API
+ */
+@InternalApi private[akka] case object DisabledRetentionCriteria
+    extends javadsl.RetentionCriteria
+    with scaladsl.RetentionCriteria {
   override def asScala: scaladsl.RetentionCriteria = this
   override def asJava: javadsl.RetentionCriteria = this
 }
