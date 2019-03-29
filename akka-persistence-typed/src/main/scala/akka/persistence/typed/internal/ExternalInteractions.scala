@@ -110,21 +110,16 @@ private[akka] trait JournalInteractions[C, E, S] {
    * before old snapshots are deleted.
    */
   protected def internalDeleteEvents(toSequenceNr: Long, lastSequenceNr: Long): Unit =
-    setup.retention match {
-      case s @ SnapshotRetentionCriteriaImpl(_, _, true) =>
-        if (toSequenceNr > 0) {
-          val self = setup.selfUntyped
+    if (toSequenceNr > 0) {
+      val self = setup.selfUntyped
 
-          if (toSequenceNr == Long.MaxValue || toSequenceNr <= lastSequenceNr)
-            setup.journal ! JournalProtocol.DeleteMessagesTo(setup.persistenceId.id, toSequenceNr, self)
-          else
-            self ! DeleteMessagesFailure(
-              new RuntimeException(
-                s"toSequenceNr [$toSequenceNr] must be less than or equal to lastSequenceNr [$lastSequenceNr]"),
-              toSequenceNr)
-        }
-      case SnapshotRetentionCriteriaImpl(_, _, false) => // don't delete events
-      case DisabledRetentionCriteria                  => // don't delete events
+      if (toSequenceNr == Long.MaxValue || toSequenceNr <= lastSequenceNr)
+        setup.journal ! JournalProtocol.DeleteMessagesTo(setup.persistenceId.id, toSequenceNr, self)
+      else
+        self ! DeleteMessagesFailure(
+          new RuntimeException(
+            s"toSequenceNr [$toSequenceNr] must be less than or equal to lastSequenceNr [$lastSequenceNr]"),
+          toSequenceNr)
     }
 }
 

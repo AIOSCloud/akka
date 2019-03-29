@@ -185,25 +185,11 @@ private[akka] final case class EventSourcedBehaviorImpl[Command, Event, State](
     copy(recovery = Recovery(selection.toUntyped))
   }
 
-  override def snapshotWhen(predicate: (State, Event, Long) => Boolean): EventSourcedBehavior[Command, Event, State] = {
-    if (retention != RetentionCriteria.disabled)
-      throw new IllegalArgumentException(s"RetentionCriteria [$retention] can't be combined with `snapshotWhen`.")
+  override def snapshotWhen(predicate: (State, Event, Long) => Boolean): EventSourcedBehavior[Command, Event, State] =
     copy(snapshotWhen = predicate)
-  }
 
-  override def withRetention(criteria: RetentionCriteria): EventSourcedBehavior[Command, Event, State] = {
-    criteria match {
-      case DisabledRetentionCriteria => copy(retention = criteria)
-      case s: SnapshotRetentionCriteriaImpl =>
-        if (retention != RetentionCriteria.disabled)
-          throw new IllegalArgumentException(s"RetentionCriteria [$retention] has already been defined.")
-        if (snapshotWhen ne ConstantFun.scalaAnyThreeToFalse)
-          throw new IllegalArgumentException(
-            s"`snapshotWhen` has already been defined, and can't be combined " +
-            s"with RetentionCriteria [$criteria].")
-        copy(retention = criteria, snapshotWhen = (_, _, seqNr) => s.snapshotWhen(seqNr))
-    }
-  }
+  override def withRetention(criteria: RetentionCriteria): EventSourcedBehavior[Command, Event, State] =
+    copy(retention = criteria)
 
   override def withTagger(tagger: Event => Set[String]): EventSourcedBehavior[Command, Event, State] =
     copy(tagger = tagger)

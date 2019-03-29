@@ -58,6 +58,13 @@ final case class SnapshotRetentionCriteriaImpl(
 
   override def withDeleteEventsOnSnapshot: SnapshotRetentionCriteriaImpl =
     copy(deleteEventsOnSnapshot = true)
+
+  override def asScala: scaladsl.RetentionCriteria = this
+
+  override def asJava: javadsl.RetentionCriteria = this
 }
 
-case object DisabledRetentionCriteria extends javadsl.RetentionCriteria with scaladsl.RetentionCriteria
+case object DisabledRetentionCriteria extends javadsl.RetentionCriteria with scaladsl.RetentionCriteria {
+  override def asScala: scaladsl.RetentionCriteria = this
+  override def asJava: javadsl.RetentionCriteria = this
+}

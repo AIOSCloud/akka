@@ -148,15 +148,7 @@ abstract class EventSourcedBehavior[Command, Event, State >: Null] private[akka]
    * INTERNAL API: DeferredBehavior init
    */
   @InternalApi override def apply(context: typed.TypedActorContext[Command]): Behavior[Command] = {
-    val snapshotWhen: (State, Event, Long) => Boolean = {
-      retentionCriteria match {
-        case DisabledRetentionCriteria =>
-          (state, event, seqNr) => shouldSnapshot(state, event, seqNr)
-
-        case s: SnapshotRetentionCriteriaImpl =>
-          (_, _, seqNr) => s.snapshotWhen(seqNr)
-      }
-    }
+    val snapshotWhen: (State, Event, Long) => Boolean = (state, event, seqNr) => shouldSnapshot(state, event, seqNr)
 
     val tagger: Event => Set[String] = { event =>
       import scala.collection.JavaConverters._
@@ -172,6 +164,7 @@ abstract class EventSourcedBehavior[Command, Event, State >: Null] private[akka]
       eventHandler()(_, _),
       getClass)
       .snapshotWhen(snapshotWhen)
+      .withRetention(retentionCriteria.asScala)
       .withTagger(tagger)
       .eventAdapter(eventAdapter())
       .withJournalPluginId(journalPluginId)

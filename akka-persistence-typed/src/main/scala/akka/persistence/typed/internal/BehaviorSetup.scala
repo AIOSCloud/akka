@@ -21,6 +21,16 @@ import akka.util.ConstantFun
 import akka.util.OptionVal
 
 /**
+ * INTERNAL API
+ */
+@InternalApi private[akka] object BehaviorSetup {
+  sealed trait SnapshotAfterPersist
+  case object NoSnapshot extends SnapshotAfterPersist
+  case object SnapshotWithRetention extends SnapshotAfterPersist
+  case object SnapshotWithoutRetention extends SnapshotAfterPersist
+}
+
+/**
  * INTERNAL API: Carry state for the Persistent behavior implementation behaviors.
  */
 @InternalApi
@@ -43,6 +53,7 @@ private[akka] final class BehaviorSetup[C, E, S](
 
   import InternalProtocol.RecoveryTickEvent
   import akka.actor.typed.scaladsl.adapter._
+  import BehaviorSetup._
 
   val persistence: Persistence = Persistence(context.system.toUntyped)
 
@@ -104,6 +115,18 @@ private[akka] final class BehaviorSetup[C, E, S](
 
   def onSignal(signal: Signal): Unit = {
     signalHandler.applyOrElse(signal, ConstantFun.scalaAnyToUnit)
+  }
+
+  def shouldSnapshot(state: S, event: E, sequenceNr: Long): SnapshotAfterPersist = {
+    retention match {
+      case DisabledRetentionCriteria =>
+        if (snapshotWhen(state, event, sequenceNr)) SnapshotWithoutRetention
+        else NoSnapshot
+      case s: SnapshotRetentionCriteriaImpl =>
+        if (s.snapshotWhen(sequenceNr)) SnapshotWithRetention
+        else if (snapshotWhen(state, event, sequenceNr)) SnapshotWithoutRetention
+        else NoSnapshot
+    }
   }
 
 }

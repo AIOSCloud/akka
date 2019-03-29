@@ -8,7 +8,9 @@ import akka.annotation.DoNotInherit
 import akka.persistence.typed.internal.DisabledRetentionCriteria
 import akka.persistence.typed.internal.SnapshotRetentionCriteriaImpl
 
-trait RetentionCriteria
+trait RetentionCriteria {
+  def asJava: akka.persistence.typed.javadsl.RetentionCriteria
+}
 
 // FIXME docs
 object RetentionCriteria {

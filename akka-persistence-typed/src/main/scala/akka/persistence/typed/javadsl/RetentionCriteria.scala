@@ -8,7 +8,9 @@ import akka.annotation.DoNotInherit
 import akka.persistence.typed.internal.DisabledRetentionCriteria
 import akka.persistence.typed.internal.SnapshotRetentionCriteriaImpl
 
-abstract class RetentionCriteria
+abstract class RetentionCriteria {
+  def asScala: akka.persistence.typed.scaladsl.RetentionCriteria
+}
 
 // FIXME docs
 object RetentionCriteria {
@@ -22,4 +24,5 @@ object RetentionCriteria {
 
 @DoNotInherit abstract class SnapshotRetentionCriteria extends RetentionCriteria {
   def withDeleteEventsOnSnapshot: SnapshotRetentionCriteria
+
 }
