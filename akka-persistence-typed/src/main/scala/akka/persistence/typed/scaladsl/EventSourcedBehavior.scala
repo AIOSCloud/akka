@@ -161,11 +161,17 @@ object EventSourcedBehavior {
    * been persisted.
    *
    * `predicate` receives the State, Event and the sequenceNr used for the Event
+   *
+   * Snapshots triggered by `snapshotWhen` will not trigger deletes of old snapshots and events if
+   * [[EventSourcedBehavior.withRetention]] with [[RetentionCriteria.snapshotEvery]] is used together with
+   * `snapshotWhen`. Such deletes are only triggered by snapshots matching the `numberOfEvents` in the
+   * [[RetentionCriteria]].
    */
   def snapshotWhen(predicate: (State, Event, Long) => Boolean): EventSourcedBehavior[Command, Event, State]
 
   /**
    * Criteria for retention/deletion of snapshots and events.
+   * By default retention is disabled, i.e. snapshots are not saved and deleted automatically.
    */
   def withRetention(criteria: RetentionCriteria): EventSourcedBehavior[Command, Event, State]
 
