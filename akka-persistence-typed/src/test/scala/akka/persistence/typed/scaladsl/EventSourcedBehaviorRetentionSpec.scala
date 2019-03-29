@@ -374,6 +374,178 @@ class EventSourcedBehaviorRetentionSpec
       retentionProbe.expectNoMessage()
     }
 
+    "be possible to combine snapshotWhen and retention criteria" in {
+      val pid = nextPid()
+      val snapshotProbe = TestProbe[Try[SnapshotMetadata]]()
+      val retentionProbe = TestProbe[Try[EventSourcedSignal]]()
+      val replyProbe = TestProbe[State]()
+
+      val persistentActor = spawn(
+        Behaviors.setup[Command](
+          ctx ⇒
+            counterWithSnapshotAndRetentionProbe(ctx, pid, snapshotProbe.ref, retentionProbe.ref)
+              .snapshotWhen((_, _, seqNr) => seqNr == 3 || seqNr == 13)
+              .withRetention(RetentionCriteria.snapshotEvery(numberOfEvents = 5, keepNSnapshots = 1))))
+
+      (1 to 3).foreach(_ => persistentActor ! Increment)
+      persistentActor ! GetValue(replyProbe.ref)
+      replyProbe.expectMessage(State(3, (0 until 3).toVector))
+      snapshotProbe.expectMessageType[Success[SnapshotMetadata]].value.sequenceNr should ===(3)
+      retentionProbe.expectNoMessage()
+
+      (4 to 10).foreach(_ => persistentActor ! Increment)
+      snapshotProbe.expectMessageType[Success[SnapshotMetadata]].value.sequenceNr should ===(5)
+      snapshotProbe.expectMessageType[Success[SnapshotMetadata]].value.sequenceNr should ===(10)
+      expectDeleteSnapshotCompleted(retentionProbe, 5, 0)
+
+      (11 to 13).foreach(_ => persistentActor ! Increment)
+      snapshotProbe.expectMessageType[Success[SnapshotMetadata]].value.sequenceNr should ===(13)
+      // no deletes triggered by snapshotWhen
+      retentionProbe.expectNoMessage()
+
+      (14 to 16).foreach(_ => persistentActor ! Increment)
+      persistentActor ! GetValue(replyProbe.ref)
+      replyProbe.expectMessage(State(16, (0 until 16).toVector))
+      snapshotProbe.expectMessageType[Success[SnapshotMetadata]].value.sequenceNr should ===(15)
+      expectDeleteSnapshotCompleted(retentionProbe, 10, 5)
+      retentionProbe.expectNoMessage()
+    }
+
+    "be possible to combine snapshotWhen and retention criteria withDeleteEventsOnSnapshot" in {
+      val pid = nextPid()
+      val snapshotProbe = TestProbe[Try[SnapshotMetadata]]()
+      val retentionProbe = TestProbe[Try[EventSourcedSignal]]()
+      val replyProbe = TestProbe[State]()
+
+      val persistentActor = spawn(
+        Behaviors.setup[Command](
+          ctx ⇒
+            counterWithSnapshotAndRetentionProbe(ctx, pid, snapshotProbe.ref, retentionProbe.ref)
+              .snapshotWhen((_, _, seqNr) => seqNr == 3 || seqNr == 13)
+              .withRetention(
+                RetentionCriteria.snapshotEvery(numberOfEvents = 2, keepNSnapshots = 3).withDeleteEventsOnSnapshot)))
+
+      (1 to 3).foreach(_ => persistentActor ! Increment)
+      persistentActor ! GetValue(replyProbe.ref)
+      replyProbe.expectMessage(State(3, (0 until 3).toVector))
+      snapshotProbe.expectMessageType[Success[SnapshotMetadata]].value.sequenceNr should ===(2)
+      snapshotProbe.expectMessageType[Success[SnapshotMetadata]].value.sequenceNr should ===(3)
+      retentionProbe.expectNoMessage()
+
+      (4 to 10).foreach(_ => persistentActor ! Increment)
+      snapshotProbe.expectMessageType[Success[SnapshotMetadata]].value.sequenceNr should ===(4)
+      snapshotProbe.expectMessageType[Success[SnapshotMetadata]].value.sequenceNr should ===(6)
+      snapshotProbe.expectMessageType[Success[SnapshotMetadata]].value.sequenceNr should ===(8)
+      retentionProbe.expectMessageType[Success[DeleteEventsCompleted]].value.toSequenceNr shouldEqual 2
+      expectDeleteSnapshotCompleted(retentionProbe, 1, 0)
+      snapshotProbe.expectMessageType[Success[SnapshotMetadata]].value.sequenceNr should ===(10)
+      retentionProbe.expectMessageType[Success[DeleteEventsCompleted]].value.toSequenceNr shouldEqual 4
+      expectDeleteSnapshotCompleted(retentionProbe, 3, 0)
+
+      (11 to 13).foreach(_ => persistentActor ! Increment)
+      snapshotProbe.expectMessageType[Success[SnapshotMetadata]].value.sequenceNr should ===(12)
+      retentionProbe.expectMessageType[Success[DeleteEventsCompleted]].value.toSequenceNr shouldEqual 6
+      expectDeleteSnapshotCompleted(retentionProbe, 5, 0)
+      snapshotProbe.expectMessageType[Success[SnapshotMetadata]].value.sequenceNr should ===(13)
+      // no deletes triggered by snapshotWhen
+      retentionProbe.expectNoMessage()
+
+      (14 to 16).foreach(_ => persistentActor ! Increment)
+      snapshotProbe.expectMessageType[Success[SnapshotMetadata]].value.sequenceNr should ===(14)
+      retentionProbe.expectMessageType[Success[DeleteEventsCompleted]].value.toSequenceNr shouldEqual 8
+      expectDeleteSnapshotCompleted(retentionProbe, 7, 1)
+      snapshotProbe.expectMessageType[Success[SnapshotMetadata]].value.sequenceNr should ===(16)
+      retentionProbe.expectMessageType[Success[DeleteEventsCompleted]].value.toSequenceNr shouldEqual 10
+      expectDeleteSnapshotCompleted(retentionProbe, 9, 3)
+      retentionProbe.expectNoMessage()
+    }
+
+    "be possible to snapshot every event" in {
+      // very bad idea to snapshot every event, but technically possible
+      val pid = nextPid()
+      val snapshotProbe = TestProbe[Try[SnapshotMetadata]]()
+      val retentionProbe = TestProbe[Try[EventSourcedSignal]]()
+      val replyProbe = TestProbe[State]()
+
+      val persistentActor = spawn(
+        Behaviors.setup[Command](ctx ⇒
+          counterWithSnapshotAndRetentionProbe(ctx, pid, snapshotProbe.ref, retentionProbe.ref)
+            .withRetention(RetentionCriteria.snapshotEvery(numberOfEvents = 1, keepNSnapshots = 3))))
+
+      (1 to 10).foreach(_ => persistentActor ! Increment)
+      persistentActor ! GetValue(replyProbe.ref)
+      replyProbe.expectMessage(State(10, (0 until 10).toVector))
+      snapshotProbe.expectMessageType[Success[SnapshotMetadata]].value.sequenceNr should ===(1)
+      snapshotProbe.expectMessageType[Success[SnapshotMetadata]].value.sequenceNr should ===(2)
+      snapshotProbe.expectMessageType[Success[SnapshotMetadata]].value.sequenceNr should ===(3)
+      snapshotProbe.expectMessageType[Success[SnapshotMetadata]].value.sequenceNr should ===(4)
+      expectDeleteSnapshotCompleted(retentionProbe, 1, 0)
+
+      snapshotProbe.expectMessageType[Success[SnapshotMetadata]].value.sequenceNr should ===(5)
+      expectDeleteSnapshotCompleted(retentionProbe, 2, 0)
+
+      snapshotProbe.expectMessageType[Success[SnapshotMetadata]].value.sequenceNr should ===(6)
+      expectDeleteSnapshotCompleted(retentionProbe, 3, 0)
+
+      snapshotProbe.expectMessageType[Success[SnapshotMetadata]].value.sequenceNr should ===(7)
+      expectDeleteSnapshotCompleted(retentionProbe, 4, 1)
+
+      snapshotProbe.expectMessageType[Success[SnapshotMetadata]].value.sequenceNr should ===(8)
+      expectDeleteSnapshotCompleted(retentionProbe, 5, 2)
+
+      snapshotProbe.expectMessageType[Success[SnapshotMetadata]].value.sequenceNr should ===(9)
+      expectDeleteSnapshotCompleted(retentionProbe, 6, 3)
+
+      snapshotProbe.expectMessageType[Success[SnapshotMetadata]].value.sequenceNr should ===(10)
+      expectDeleteSnapshotCompleted(retentionProbe, 7, 4)
+    }
+
+    "be possible to snapshot every event withDeleteEventsOnSnapshot" in {
+      // very bad idea to snapshot every event, but technically possible
+      val pid = nextPid()
+      val snapshotProbe = TestProbe[Try[SnapshotMetadata]]()
+      val retentionProbe = TestProbe[Try[EventSourcedSignal]]()
+      val replyProbe = TestProbe[State]()
+
+      val persistentActor = spawn(
+        Behaviors.setup[Command](ctx ⇒
+          counterWithSnapshotAndRetentionProbe(ctx, pid, snapshotProbe.ref, retentionProbe.ref).withRetention(
+            RetentionCriteria.snapshotEvery(numberOfEvents = 1, keepNSnapshots = 3).withDeleteEventsOnSnapshot)))
+
+      (1 to 10).foreach(_ => persistentActor ! Increment)
+      persistentActor ! GetValue(replyProbe.ref)
+      replyProbe.expectMessage(State(10, (0 until 10).toVector))
+      snapshotProbe.expectMessageType[Success[SnapshotMetadata]].value.sequenceNr should ===(1)
+      snapshotProbe.expectMessageType[Success[SnapshotMetadata]].value.sequenceNr should ===(2)
+      snapshotProbe.expectMessageType[Success[SnapshotMetadata]].value.sequenceNr should ===(3)
+      snapshotProbe.expectMessageType[Success[SnapshotMetadata]].value.sequenceNr should ===(4)
+      retentionProbe.expectMessageType[Success[DeleteEventsCompleted]].value.toSequenceNr shouldEqual 1
+
+      snapshotProbe.expectMessageType[Success[SnapshotMetadata]].value.sequenceNr should ===(5)
+      retentionProbe.expectMessageType[Success[DeleteEventsCompleted]].value.toSequenceNr shouldEqual 2
+      expectDeleteSnapshotCompleted(retentionProbe, 1, 0)
+
+      snapshotProbe.expectMessageType[Success[SnapshotMetadata]].value.sequenceNr should ===(6)
+      retentionProbe.expectMessageType[Success[DeleteEventsCompleted]].value.toSequenceNr shouldEqual 3
+      expectDeleteSnapshotCompleted(retentionProbe, 2, 0)
+
+      snapshotProbe.expectMessageType[Success[SnapshotMetadata]].value.sequenceNr should ===(7)
+      retentionProbe.expectMessageType[Success[DeleteEventsCompleted]].value.toSequenceNr shouldEqual 4
+      expectDeleteSnapshotCompleted(retentionProbe, 3, 0)
+
+      snapshotProbe.expectMessageType[Success[SnapshotMetadata]].value.sequenceNr should ===(8)
+      retentionProbe.expectMessageType[Success[DeleteEventsCompleted]].value.toSequenceNr shouldEqual 5
+      expectDeleteSnapshotCompleted(retentionProbe, 4, 1)
+
+      snapshotProbe.expectMessageType[Success[SnapshotMetadata]].value.sequenceNr should ===(9)
+      retentionProbe.expectMessageType[Success[DeleteEventsCompleted]].value.toSequenceNr shouldEqual 6
+      expectDeleteSnapshotCompleted(retentionProbe, 5, 2)
+
+      snapshotProbe.expectMessageType[Success[SnapshotMetadata]].value.sequenceNr should ===(10)
+      retentionProbe.expectMessageType[Success[DeleteEventsCompleted]].value.toSequenceNr shouldEqual 7
+      expectDeleteSnapshotCompleted(retentionProbe, 6, 3)
+    }
+
     def watcher(toWatch: ActorRef[_]): TestProbe[String] = {
       val probe = TestProbe[String]()
       val w = Behaviors.setup[Any] { ctx =>
