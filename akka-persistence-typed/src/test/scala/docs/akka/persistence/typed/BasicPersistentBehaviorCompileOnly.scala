@@ -193,7 +193,7 @@ object BasicPersistentBehaviorCompileOnly {
       case (state, BookingCompleted(_), sequenceNumber) => true
       case (state, event, sequenceNumber)               => false
     }
-    .withRetention(RetentionCriteria.snapshotEvery(numberOfEvents = 1000, keepNSnapshots = 5))
+    .withRetention(RetentionCriteria.snapshotEvery(numberOfEvents = 100, keepNSnapshots = 2))
   //#retentionCriteria
 
   //#snapshotAndEventDeletes
@@ -203,12 +203,12 @@ object BasicPersistentBehaviorCompileOnly {
     emptyState = State(),
     commandHandler = (state, cmd) => Effect.noReply, // do something based on a particular command and state
     eventHandler = (state, evt) => state) // do something based on a particular event and state
-    .snapshotWhen {
-      case (state, BookingCompleted(_), sequenceNumber) => true
-      case (state, event, sequenceNumber)               => false
+    .withRetention(RetentionCriteria.snapshotEvery(numberOfEvents = 100, keepNSnapshots = 2).withDeleteEventsOnSnapshot)
+    .receiveSignal { // optionally respond to signals
+      case _: SnapshotFailed        => // react to failure
+      case _: DeleteSnapshotsFailed => // react to failure
+      case _: DeleteEventsFailed    => // react to failure
     }
-    .withRetention(
-      RetentionCriteria.snapshotEvery(numberOfEvents = 1000, keepNSnapshots = 2).withDeleteEventsOnSnapshot)
   //#snapshotAndEventDeletes
 
   //#retentionCriteriaWithSignals
@@ -218,15 +218,10 @@ object BasicPersistentBehaviorCompileOnly {
     emptyState = State(),
     commandHandler = (state, cmd) => Effect.noReply, // do something based on a particular command and state
     eventHandler = (state, evt) => state) // do something based on a particular event and state
-    .snapshotWhen {
-      case (state, BookingCompleted(_), sequenceNumber) => true
-      case (state, event, sequenceNumber)               => false
-    }
-    .withRetention(RetentionCriteria.snapshotEvery(numberOfEvents = 1000, keepNSnapshots = 2))
+    .withRetention(RetentionCriteria.snapshotEvery(numberOfEvents = 100, keepNSnapshots = 2))
     .receiveSignal { // optionally respond to signals
       case _: SnapshotFailed        => // react to failure
       case _: DeleteSnapshotsFailed => // react to failure
-      case _: DeleteEventsFailed    => // react to failure
     }
   //#retentionCriteriaWithSignals
 

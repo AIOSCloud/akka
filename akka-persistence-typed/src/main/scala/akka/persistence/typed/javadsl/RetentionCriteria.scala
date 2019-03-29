@@ -27,7 +27,7 @@ object RetentionCriteria {
 
   /**
    * Save snapshots automatically every `numberOfEvents`. Snapshots that have sequence number
-   * less than the current sequence number minus `keepNSnapshots * numberOfEvents` are automatically
+   * less than the sequence number of the saved snapshot minus `keepNSnapshots * numberOfEvents` are automatically
    * deleted.
    *
    * Use [[SnapshotRetentionCriteria.withDeleteEventsOnSnapshot]] to

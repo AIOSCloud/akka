@@ -277,8 +277,7 @@ public class BasicPersistentBehaviorTest {
       // #retentionCriteria
       @Override // override retentionCriteria in EventSourcedBehavior
       public RetentionCriteria retentionCriteria() {
-        // to also delete events use `RetentionCriteria.withDeleteEventsOnSnapshot()`
-        return RetentionCriteria.snapshotEvery(1000, 2);
+        return RetentionCriteria.snapshotEvery(100, 2);
       }
       // #retentionCriteria
 
@@ -306,6 +305,19 @@ public class BasicPersistentBehaviorTest {
             .build();
       }
       // #retentionCriteriaWithSignals
+    }
+
+    public static class Snapshotting2 extends Snapshotting {
+      public Snapshotting2(PersistenceId persistenceId) {
+        super(persistenceId);
+      }
+
+      // #snapshotAndEventDeletes
+      @Override // override retentionCriteria in EventSourcedBehavior
+      public RetentionCriteria retentionCriteria() {
+        return RetentionCriteria.snapshotEvery(100, 2).withDeleteEventsOnSnapshot();
+      }
+      // #snapshotAndEventDeletes
     }
   }
 
