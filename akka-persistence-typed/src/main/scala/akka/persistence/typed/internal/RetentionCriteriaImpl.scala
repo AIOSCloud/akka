@@ -30,30 +30,22 @@ final case class SnapshotRetentionCriteriaImpl(
     with scaladsl.SnapshotRetentionCriteria {
 
   require(snapshotEveryNEvents > 0, s"snapshotEveryNEvents must be greater than 0, was [$snapshotEveryNEvents]")
-  // FIXME should we support 0 or 1 as minimum?
-  require(keepNSnapshots >= 0, s"keepNSnapshots must be greater than or equal to 0, was [$keepNSnapshots]")
+  // FIXME should we support 1 as minimum?
+  require(keepNSnapshots > 0, s"keepNSnapshots must be greater than 0, was [$keepNSnapshots]")
 
   def snapshotWhen(currentSequenceNr: Long): Boolean =
     currentSequenceNr % snapshotEveryNEvents == 0
 
-  /**
-   * Delete Messages:
-   *   {{{ toSequenceNr - keepNSnapshots * snapshotEveryNEvents }}}
-   * Delete Snapshots:
-   *   {{{ (toSequenceNr - 1) - (keepNSnapshots * snapshotEveryNEvents) }}}
-   *
-   * @param lastSequenceNr the sequence number to delete to if `deleteEventsOnSnapshot` is false
-   */
-  def toSequenceNumber(lastSequenceNr: Long): Long = {
+  def deleteUpperSequenceNr(lastSequenceNr: Long): Long = {
     // Delete old events, retain the latest
     math.max(0, lastSequenceNr - (keepNSnapshots * snapshotEveryNEvents))
   }
 
-  def deleteSnapshotsFromSequenceNr(toSeqNr: Long): Long = {
+  def deleteLowerSequenceNr(upperSequenceNr: Long): Long = {
     // We could use 0 as fromSequenceNr to delete all older snapshots, but that might be inefficient for
     // large ranges depending on how it's implemented in the snapshot plugin. Therefore we use the
     // same window as defined for how much to keep in the retention criteria
-    toSequenceNumber(toSeqNr)
+    math.max(0, upperSequenceNr - (keepNSnapshots * snapshotEveryNEvents))
   }
 
   override def withDeleteEventsOnSnapshot: SnapshotRetentionCriteriaImpl =

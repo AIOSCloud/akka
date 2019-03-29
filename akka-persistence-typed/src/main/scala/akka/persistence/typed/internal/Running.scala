@@ -337,12 +337,12 @@ private[akka] object Running {
               case DisabledRetentionCriteria                     => // no further actions
               case s @ SnapshotRetentionCriteriaImpl(_, _, true) =>
                 // deleteEventsOnSnapshot == true, deletion of old events
-                val deleteEventsToSeqNr = s.toSequenceNumber(meta.sequenceNr)
+                val deleteEventsToSeqNr = s.deleteUpperSequenceNr(meta.sequenceNr)
                 internalDeleteEvents(deleteEventsToSeqNr, meta.sequenceNr)
               case s @ SnapshotRetentionCriteriaImpl(_, _, false) =>
                 // deleteEventsOnSnapshot == false, deletion of old snapshots
-                val deleteSnapshotsToSeqNr = s.toSequenceNumber(meta.sequenceNr)
-                internalDeleteSnapshots(s.deleteSnapshotsFromSequenceNr(deleteSnapshotsToSeqNr), deleteSnapshotsToSeqNr)
+                val deleteSnapshotsToSeqNr = s.deleteUpperSequenceNr(meta.sequenceNr)
+                internalDeleteSnapshots(s.deleteLowerSequenceNr(deleteSnapshotsToSeqNr), deleteSnapshotsToSeqNr)
             }
           }
 
@@ -440,7 +440,7 @@ private[akka] object Running {
             // after that can be replayed after that snapshot, but replaying the events after toSequenceNr without
             // starting at the snapshot at toSequenceNr would be invalid.
             val deleteSnapshotsToSeqNr = toSequenceNr - 1
-            internalDeleteSnapshots(s.deleteSnapshotsFromSequenceNr(deleteSnapshotsToSeqNr), deleteSnapshotsToSeqNr)
+            internalDeleteSnapshots(s.deleteLowerSequenceNr(deleteSnapshotsToSeqNr), deleteSnapshotsToSeqNr)
         }
         Some(DeleteEventsCompleted(toSequenceNr))
       case DeleteMessagesFailure(e, toSequenceNr) =>
